@@ -15,7 +15,7 @@ const port = 300;
 const db = mongoose.connection;
 const mongoDBURL = 'mongodb://localhost/ostaa';
 
-var Schema = mongoose.schema;
+var Schema = mongoose.Schema;
 
 var itemSchema = new Schema({
   title: String,
@@ -24,6 +24,7 @@ var itemSchema = new Schema({
   price: Number,
   stat: String
 });
+
 var Item = mongoose.model('Item', itemSchema);
 
 var userSchema = new Schema({
@@ -37,35 +38,98 @@ var User = mongoose.model('User', userSchema);
 mongoose.connect(mongoDBURL, { useNewUrlParser: true});
 db.on('error', console.error.bind(console, 'MongoDB connection error:'));
 
-var newUser = new User({username:"jacobthetallone", password:"drowssap", listings: [], purchases: []})
-newUser.save((err) => {if (err) console.log('ERROR IN NEW USER'); console.log('SAVED')});
-
 app.use(express.static('public_html'));
 
-/*
-app.get('/chats', function(req, res){
-  if(req.url != '/favicon.ico'){
-    ChatMessage.find({}).sort({"time":1}) // sorts the DB first
-    .exec((err,results) =>{
-      var resString = '';
-      for(i in results){
-        r = results[i];
-        resString += '<div class="message"> <strong>'+ r.alias+':</string>'+ r.message+'</div><br>';
-      }
-      res.end(resString);
-    })
-  }
-});
-*/
+app.set('json spaces', 2);
+
+app.use(express.urlencoded({extended: true}));
+app.use(express.json());
+
+
 
 app.get('/get/users', function(req, res){
   if(req.url != '/favicon.ico'){
     User.find({}).exec((err, results) =>{
-      var resString = '';
-      for(i in results){
-        resString += JSON.stringify(i);
-      }
-      res.end(resString);
+
+      res.json(results);
     })
   }
-})
+});
+
+app.get('/get/items', function(req, res){
+  if(req.url != '/favicon.ico'){
+    Item.find({}).exec((err, results) =>{
+      res.json(results);
+    })
+  }
+});
+
+app.get('/get/listings/:username',(req, res) =>{
+  User.findOne({username: req.params.username }).exec((err, result) =>{
+      if (err) return res.end('FAIL');
+      if (!result) return res.end('FAIL');
+      Item.find({_id: result.listings}).exec((err,listingResults) => {
+        res.json(listingResults);
+      });
+    });
+});
+
+app.get('/get/purchases/:username',(req, res) =>{
+  User.findOne({username: req.params.username }).exec((err, result) =>{
+      if (err) return res.end('FAIL');
+      if (!result) return res.end('FAIL');
+      Item.find({_id: result.purchases}).exec((err,purchasesResults) => {
+        res.json(purchasesResults);
+      });
+    });
+});
+
+app.get('/search/users/:keyword', (req,res) =>{
+  User.find({username: {$regex: req.params.keyword }}).exec((err,results) =>{
+    res.json(results);
+  });
+});
+
+app.get('/search/items/:keyword', (req,res) =>{
+  Item.find({description: {$regex: req.params.keyword }}).exec((err,results) =>{
+    res.json(results);
+  });
+});
+
+app.post('/add/user/', (req,res) => {
+  requestData = req.body;
+  var newUser = new User({
+    username: requestData.username,
+    password: requestData.password,
+    listings: [],
+    purchases: []
+  });
+  newUser.save(function(err) {if (err) res.send("FAILED TO ADD USER");});
+  res.send('SAVED USER');
+});
+
+app.post('/add/item/:username', (req,res) => {
+  requestData = req.body;
+  User.findOne({username: req.params.username})
+  .exec(function(err,result){
+    if (err) return res.end('FAIL');
+    if (!result) return res.end('FAIL');
+    var newItem = new Item({
+      title: requestData.title,
+      description: requestData.description,
+      image: requestData.image,
+      price: requestData.price,
+      stat: requestData.status
+    });
+    result.listings.push(newItem._id);
+    result.save();
+
+    newItem.save(function(err) {if (err) res.send('FAILED TO ADD ITEM')});
+
+    res.send('SAVED ITEM');
+  })
+});
+
+app.listen(port,function () {
+  console.log(`App listening at http://${hostname}:${port}`);
+});
